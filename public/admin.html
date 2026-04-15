@@ -1,0 +1,233 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <title>Admin Command Center - Restaurant AI</title>
+    <style>
+        :root { --primary: #4f46e5; --bg: #f5f7ff; --card: rgba(255,255,255,0.9); --text: #0f172a; }
+        body { font-family: Inter, "Segoe UI", sans-serif; background: radial-gradient(circle at top right, #dbeafe, transparent 35%), radial-gradient(circle at top left, #ede9fe, transparent 28%), var(--bg); color: var(--text); margin: 0; display: flex; height: 100vh; }
+        .sidebar { width: 300px; background: linear-gradient(180deg, #1e1b4b, #1e293b); color: white; padding: 1.5rem; display: flex; flex-direction: column; gap: 1rem; box-shadow: 8px 0 24px rgba(15, 23, 42, 0.15); }
+        .main { flex: 1; padding: 2rem; overflow-y: auto; display: grid; grid-template-columns: 1fr 1fr; gap: 1.2rem; }
+        .card { background: var(--card); backdrop-filter: blur(7px); border-radius: 14px; border: 1px solid #e2e8f0; padding: 1.1rem; box-shadow: 0 10px 28px rgba(15,23,42,0.08); }
+        .full-width { grid-column: span 2; }
+        h1, h2 { margin-top: 0; color: #312e81; }
+        button { background: linear-gradient(135deg, var(--primary), #6366f1); color: white; border: none; padding: 0.7rem 1rem; border-radius: 8px; cursor: pointer; font-weight: 600; box-shadow: 0 6px 14px rgba(79,70,229,0.25); }
+        #chat-box { height: 300px; overflow-y: auto; display: flex; flex-direction: column; gap: 0.5rem; margin-bottom: 1rem; background: #f8fafc; border: 1px solid #e2e8f0; border-radius: 8px; padding: 0.7rem; }
+        .msg { padding: 0.5rem 1rem; border-radius: 10px; max-width: 80%; }
+        .user { background: #dcfce7; align-self: flex-end; }
+        .ai { background: #eef2ff; align-self: flex-start; }
+        .nav-link { color: #cbd5e1; text-decoration: none; padding: 0.55rem; border-radius: 8px; }
+        .nav-link:hover { background: rgba(255,255,255,0.12); color: white; }
+        .small-muted { font-size: 0.8rem; opacity: 0.85; }
+        #ai-output { margin-top: 1rem; white-space: pre-wrap; font-size: 0.9rem; border-top: 1px solid #e2e8f0; padding-top: 1rem; background: #f8fafc; border-radius: 8px; padding: 0.9rem; }
+        .inline-row { display: flex; gap: 0.5rem; }
+        .inline-row input { flex: 1; padding: 0.6rem; border: 1px solid #cbd5e1; border-radius: 8px; }
+        .inline-row select { padding: 0.6rem; border: 1px solid #cbd5e1; border-radius: 8px; background: #fff; }
+        .mini-btn { padding: 0.35rem 0.55rem; font-size: 0.75rem; border-radius: 6px; }
+        .staff-list { display: flex; flex-direction: column; gap: 0.5rem; max-height: 240px; overflow: auto; }
+        .staff-item { display: flex; justify-content: space-between; align-items: center; background: #f8fafc; border: 1px solid #e2e8f0; border-radius: 8px; padding: 0.55rem; }
+        .staff-item small { color: #64748b; display: block; }
+        .kpi { display: grid; grid-template-columns: 1fr 1fr; gap: 0.6rem; }
+        .kpi .tile { background: #f8fafc; border: 1px solid #e2e8f0; border-radius: 8px; padding: 0.6rem; }
+        .kpi .value { font-size: 1.15rem; font-weight: 700; color: #1e1b4b; }
+    </style>
+    <script src="https://cdn.socket.io/4.7.2/socket.io.min.js"></script>
+</head>
+<body>
+    <div class="sidebar">
+        <h2>Restaurant AI</h2>
+        <a href="/customer.html" target="_blank" class="nav-link">Customer Portal ↗</a>
+        <a href="/kitchen.html" target="_blank" class="nav-link">Kitchen Display ↗</a>
+        <hr style="border: 0; border-top: 1px solid #334155;">
+        <h3>Live Activity</h3>
+        <div id="activity-log" class="small-muted"></div>
+    </div>
+
+    <div class="main">
+        <div class="card full-width">
+            <h1>Autonomous Intelligence</h1>
+            <p>Scanning live operations for bottlenecks and optimizations.</p>
+            <button onclick="triggerAI()">Run Global Analysis</button>
+            <div id="ai-output">
+                No analysis generated yet.
+            </div>
+        </div>
+
+        <div class="card">
+            <h2>Business Consultant</h2>
+            <div id="chat-box"></div>
+            <div class="inline-row">
+                <input type="text" id="chat-input" placeholder="Ask AI...">
+                <button onclick="sendChat()">Send</button>
+            </div>
+        </div>
+
+        <div class="card">
+            <h2>Real-time Stats</h2>
+            <div id="stats">
+                <p>Loading stats...</p>
+            </div>
+        </div>
+
+        <div class="card">
+            <h2>Staff Resource Manager</h2>
+            <div class="inline-row" style="margin-bottom: 0.5rem;">
+                <input type="text" id="staff-name" placeholder="Staff name">
+                <input type="text" id="staff-role" placeholder="Role (chef, server)">
+                <button onclick="addStaff()">Add</button>
+            </div>
+            <div class="inline-row" style="margin-bottom: 0.8rem;">
+                <button onclick="autoAssignOrders()">Auto Assign Active Orders</button>
+            </div>
+            <div id="staff-list" class="staff-list"></div>
+        </div>
+
+        <div class="card">
+            <h2>Resource Health</h2>
+            <div id="resource-health" class="kpi">
+                <div class="tile"><div>Loading...</div></div>
+            </div>
+        </div>
+    </div>
+
+    <script>
+        const socket = io();
+
+        async function triggerAI() {
+            const out = document.getElementById('ai-output');
+            out.innerText = "Analyzing live data...";
+            const res = await fetch('/api/ai/decision', { method: 'POST' });
+            const data = await res.json();
+            out.innerText = data.response;
+        }
+
+        async function sendChat() {
+            const input = document.getElementById('chat-input');
+            const box = document.getElementById('chat-box');
+            const question = input.value;
+            if (!question) return;
+
+            box.innerHTML += `<div class="msg user">${question}</div>`;
+            input.value = '';
+
+            const res = await fetch('/api/ai/chat', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ question })
+            });
+            const data = await res.json();
+            box.innerHTML += `<div class="msg ai">${data.response}</div>`;
+            box.scrollTop = box.scrollHeight;
+        }
+
+        async function updateStats() {
+            const res = await fetch('/api/orders');
+            const orders = await res.json();
+            const pending = orders.filter(o => o.status === 'pending').length;
+            const prep = orders.filter(o => o.status === 'preparing').length;
+            
+            document.getElementById('stats').innerHTML = `
+                <p><strong>Pending Orders:</strong> ${pending}</p>
+                <p><strong>In Preparation:</strong> ${prep}</p>
+                <p><strong>Total Orders (Today):</strong> ${orders.length}</p>
+            `;
+        }
+
+        function shiftBadgeLabel(status) {
+            if (status === 'on_break') return 'On Break';
+            if (status === 'off') return 'Off';
+            return 'Active';
+        }
+
+        async function loadStaff() {
+            const res = await fetch('/api/staff');
+            const staff = await res.json();
+            const list = document.getElementById('staff-list');
+            if (!Array.isArray(staff) || staff.length === 0) {
+                list.innerHTML = '<p class="small-muted">No staff available.</p>';
+                return;
+            }
+
+            list.innerHTML = staff.map((member) => `
+                <div class="staff-item">
+                    <div>
+                        <strong>${member.name}</strong>
+                        <small>${member.role} | Shift: ${shiftBadgeLabel(member.shiftStatus)} | Workload: ${member.workload} (${member.assignedOrders || 0} orders)</small>
+                    </div>
+                    <div class="inline-row">
+                        <button class="mini-btn" onclick="updateStaffShift('${member._id}', 'active')">Active</button>
+                        <button class="mini-btn" onclick="updateStaffShift('${member._id}', 'on_break')">Break</button>
+                        <button class="mini-btn" onclick="updateStaffShift('${member._id}', 'off')">Off</button>
+                    </div>
+                </div>
+            `).join('');
+        }
+
+        async function addStaff() {
+            const nameInput = document.getElementById('staff-name');
+            const roleInput = document.getElementById('staff-role');
+            const name = nameInput.value.trim();
+            const role = roleInput.value.trim();
+            if (!name || !role) return;
+
+            await fetch('/api/staff', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ name, role, shiftStatus: 'active' })
+            });
+
+            nameInput.value = '';
+            roleInput.value = '';
+            await loadStaff();
+            await updateResourceHealth();
+        }
+
+        async function updateStaffShift(staffId, shiftStatus) {
+            await fetch(`/api/staff/${staffId}`, {
+                method: 'PATCH',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ shiftStatus })
+            });
+            await loadStaff();
+            await updateResourceHealth();
+        }
+
+        async function autoAssignOrders() {
+            const res = await fetch('/api/staff/assign-orders', { method: 'POST' });
+            const data = await res.json();
+            const out = document.getElementById('ai-output');
+            out.innerText = data.message || 'Assignment triggered.';
+            await loadStaff();
+            await updateResourceHealth();
+        }
+
+        async function updateResourceHealth() {
+            const res = await fetch('/api/resources/overview');
+            const data = await res.json();
+            const host = document.getElementById('resource-health');
+            host.innerHTML = `
+                <div class="tile"><div>Active Staff</div><div class="value">${data.staffStats?.active ?? 0}</div></div>
+                <div class="tile"><div>High Workload Staff</div><div class="value">${data.staffStats?.highWorkload ?? 0}</div></div>
+                <div class="tile"><div>Low Stock Items</div><div class="value">${data.lowStockCount ?? 0}</div></div>
+                <div class="tile"><div>Pending + Preparing</div><div class="value">${(data.orderStats?.pending ?? 0) + (data.orderStats?.preparing ?? 0)}</div></div>
+            `;
+        }
+
+        socket.on('order-update', (data) => {
+            const log = document.getElementById('activity-log');
+            log.innerHTML = `<div>[${new Date().toLocaleTimeString()}] Order ${data.type}: #${data.order._id.slice(-4)}</div>` + log.innerHTML;
+            updateStats();
+            updateResourceHealth();
+        });
+
+        socket.on('staff-update', () => {
+            loadStaff();
+            updateResourceHealth();
+        });
+
+        updateStats();
+        loadStaff();
+        updateResourceHealth();
+    </script>
+</body>
+</html>

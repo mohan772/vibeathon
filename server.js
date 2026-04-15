@@ -7,6 +7,7 @@ import { createServer } from 'http';
 import path from 'path';
 import { fileURLToPath } from 'url';
 import indexRoutes from './routes/index.js';
+import { runShiftCommander } from './services/shiftCommander.js';
 
 dotenv.config();
 
@@ -33,14 +34,14 @@ io.on('connection', (socket) => {
 // Middleware
 app.use(cors());
 app.use(express.json());
-app.use(express.static(__dirname)); // Serve static files (like index.html)
+app.use(express.static(path.join(__dirname, 'public'))); // Serve from public
 
 // Routes
 app.use('/api', indexRoutes);
 
 // Serve Dashboard
 app.get('/', (req, res) => {
-  res.sendFile(path.join(__dirname, 'index.html'));
+  res.sendFile(path.join(__dirname, 'public', 'admin.html'));
 });
 
 // Database connection
@@ -51,6 +52,12 @@ mongoose.connect(MONGODB_URI)
     console.log('Connected to MongoDB');
     httpServer.listen(PORT, () => {
       console.log(`Server is running on port ${PORT}`);
+      
+      // Run AI Shift Commander every 30 seconds
+      setInterval(() => {
+        console.log("Running AI Shift Commander...");
+        runShiftCommander().catch(err => console.error("Auto Shift Commander Error:", err.message));
+      }, 30000);
     });
   })
   .catch((error) => {

@@ -1,0 +1,203 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <title>Kitchen Display - Restaurant AI</title>
+    <style>
+        :root { --primary: #4f46e5; --bg: #f5f7ff; --card: rgba(255, 255, 255, 0.9); }
+        body { font-family: Inter, "Segoe UI", sans-serif; background: radial-gradient(circle at top right, #dbeafe, transparent 35%), radial-gradient(circle at top left, #ede9fe, transparent 28%), var(--bg); margin: 0; padding: 1rem; height: 100vh; box-sizing: border-box; color: #0f172a; }
+        .layout { display: flex; flex-direction: column; gap: 1rem; height: 100%; }
+        .stats-grid { display: grid; grid-template-columns: repeat(5, minmax(120px, 1fr)); gap: 0.75rem; }
+        .stat-card { background: var(--card); backdrop-filter: blur(6px); border: 1px solid #e2e8f0; border-radius: 12px; padding: 0.75rem; box-shadow: 0 8px 24px rgba(15, 23, 42, 0.06); }
+        .stat-label { color: #475569; font-size: 0.8rem; }
+        .stat-value { font-size: 1.2rem; font-weight: 700; color: #0f172a; margin-top: 0.25rem; }
+        .menu-availability { background: var(--card); border-radius: 12px; border: 1px solid #e2e8f0; padding: 0.9rem; box-shadow: 0 8px 24px rgba(15, 23, 42, 0.06); }
+        .menu-availability h2 { margin: 0 0 0.6rem 0; border-bottom: 0; padding-bottom: 0; }
+        .menu-list { display: flex; flex-wrap: wrap; gap: 0.6rem; }
+        .menu-item-control { display: inline-flex; align-items: center; gap: 0.45rem; border-radius: 999px; padding: 0.3rem 0.5rem 0.3rem 0.7rem; font-size: 0.8rem; font-weight: 600; border: 1px solid transparent; }
+        .menu-item-control.available { background: #dcfce7; color: #166534; border-color: #86efac; }
+        .menu-item-control.unavailable { background: #fee2e2; color: #991b1b; border-color: #fca5a5; }
+        .availability-btn { border: none; border-radius: 999px; padding: 0.22rem 0.55rem; font-size: 0.72rem; cursor: pointer; background: linear-gradient(135deg, var(--primary), #6366f1); color: #fff; }
+        .availability-btn:disabled { opacity: 0.6; cursor: not-allowed; }
+        .board { display: flex; gap: 1rem; min-height: 0; flex: 1; }
+        .column { flex: 1; background: rgba(226, 232, 240, 0.72); border: 1px solid #dbe2ee; border-radius: 12px; padding: 1rem; display: flex; flex-direction: column; gap: 1rem; overflow-y: auto; }
+        .order-card { background: var(--card); backdrop-filter: blur(4px); border: 1px solid #e2e8f0; padding: 1rem; border-radius: 10px; box-shadow: 0 4px 12px rgba(15, 23, 42, 0.08); }
+        h2 { margin-top: 0; font-size: 1.05rem; color: #1e1b4b; border-bottom: 2px solid #c7d2fe; padding-bottom: 0.5rem; }
+        .btn { padding: 5px 9px; font-size: 0.8rem; cursor: pointer; background: linear-gradient(135deg, var(--primary), #6366f1); color: white; border: none; border-radius: 6px; }
+    </style>
+    <script src="https://cdn.socket.io/4.7.2/socket.io.min.js"></script>
+</head>
+<body>
+    <div class="layout">
+        <div class="stats-grid">
+            <div class="stat-card">
+                <div class="stat-label">Total Orders</div>
+                <div class="stat-value" id="stat-total">0</div>
+            </div>
+            <div class="stat-card">
+                <div class="stat-label">Pending</div>
+                <div class="stat-value" id="stat-pending">0</div>
+            </div>
+            <div class="stat-card">
+                <div class="stat-label">Preparing</div>
+                <div class="stat-value" id="stat-preparing">0</div>
+            </div>
+            <div class="stat-card">
+                <div class="stat-label">Completed</div>
+                <div class="stat-value" id="stat-completed">0</div>
+            </div>
+            <div class="stat-card">
+                <div class="stat-label">Total Sales</div>
+                <div class="stat-value" id="stat-sales">$0.00</div>
+            </div>
+        </div>
+
+        <div class="menu-availability">
+            <h2>Menu Availability</h2>
+            <div id="menu-availability-list" class="menu-list">Loading menu items...</div>
+        </div>
+
+        <div class="board">
+            <div class="column" id="pending">
+                <h2>Pending</h2>
+            </div>
+            <div class="column" id="preparing">
+                <h2>Preparing</h2>
+            </div>
+            <div class="column" id="completed">
+                <h2>Completed</h2>
+            </div>
+        </div>
+    </div>
+
+    <script>
+        const socket = io();
+
+        function normalizeStatus(status) {
+            if (status === 'done') return 'completed';
+            return status;
+        }
+
+        function updateStats(orders) {
+            const stats = { total: orders.length, pending: 0, preparing: 0, completed: 0, sales: 0 };
+
+            orders.forEach((order) => {
+                const normalized = normalizeStatus(order.status);
+                if (normalized === 'pending') stats.pending += 1;
+                if (normalized === 'preparing') stats.preparing += 1;
+                if (normalized === 'completed') stats.completed += 1;
+                stats.sales += Number(order.totalAmount || 0);
+            });
+
+            document.getElementById('stat-total').textContent = String(stats.total);
+            document.getElementById('stat-pending').textContent = String(stats.pending);
+            document.getElementById('stat-preparing').textContent = String(stats.preparing);
+            document.getElementById('stat-completed').textContent = String(stats.completed);
+            document.getElementById('stat-sales').textContent = `$${stats.sales.toFixed(2)}`;
+        }
+
+        async function loadOrders() {
+            const res = await fetch('/api/orders');
+            const orders = await res.json();
+            renderOrders(orders);
+            updateStats(orders);
+        }
+
+        async function loadMenuAvailability() {
+            try {
+                const res = await fetch('/api/menu');
+                const menuItems = await res.json();
+                const container = document.getElementById('menu-availability-list');
+
+                if (!Array.isArray(menuItems) || menuItems.length === 0) {
+                    container.textContent = 'No menu items found.';
+                    return;
+                }
+
+                container.innerHTML = menuItems
+                    .sort((a, b) => a.name.localeCompare(b.name))
+                    .map((item) => {
+                        const statusClass = item.available === false ? 'unavailable' : 'available';
+                        const statusText = item.available === false ? 'Unavailable' : 'Available';
+                        const nextValue = item.available === false;
+                        const actionText = item.available === false ? 'Set Available' : 'Set Unavailable';
+                        return `
+                            <span class="menu-item-control ${statusClass}">
+                                ${item.name} - ${statusText}
+                                <button class="availability-btn" onclick="toggleMenuAvailability('${item._id}', ${nextValue})">
+                                    ${actionText}
+                                </button>
+                            </span>
+                        `;
+                    })
+                    .join('');
+            } catch (error) {
+                document.getElementById('menu-availability-list').textContent = 'Failed to load menu availability.';
+            }
+        }
+
+        async function toggleMenuAvailability(itemId, available) {
+            const buttons = document.querySelectorAll('.availability-btn');
+            buttons.forEach((btn) => { btn.disabled = true; });
+            try {
+                const response = await fetch(`/api/menu/${itemId}/availability`, {
+                    method: 'PATCH',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ available })
+                });
+                if (!response.ok) {
+                    const data = await response.json();
+                    throw new Error(data.error || 'Failed to update availability.');
+                }
+                await loadMenuAvailability();
+            } catch (error) {
+                alert(error.message);
+            } finally {
+                buttons.forEach((btn) => { btn.disabled = false; });
+            }
+        }
+
+        function renderOrders(orders) {
+            document.querySelectorAll('.column').forEach(c => {
+                const h2 = c.querySelector('h2');
+                c.innerHTML = '';
+                c.appendChild(h2);
+            });
+
+            orders.forEach(order => {
+                const status = normalizeStatus(order.status);
+                const col = document.getElementById(status);
+                if (col) {
+                    const card = document.createElement('div');
+                    card.className = 'order-card';
+                    card.innerHTML = `
+                        <strong>#${order._id.slice(-4)}</strong><br>
+                        ${order.items.join(', ')}<br><br>
+                        ${status === 'pending' ? `<button class="btn" onclick="updateStatus('${order._id}', 'preparing')">Start</button>` : ''}
+                        ${status === 'preparing' ? `<button class="btn" onclick="updateStatus('${order._id}', 'done')">Done</button>` : ''}
+                    `;
+                    col.appendChild(card);
+                }
+            });
+        }
+
+        async function updateStatus(id, status) {
+            await fetch(`/api/orders/${id}`, {
+                method: 'PATCH',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ status })
+            });
+        }
+
+        socket.on('order-update', () => {
+            loadOrders();
+            loadMenuAvailability();
+        });
+        socket.on('menu-update', () => {
+            loadMenuAvailability();
+        });
+        loadOrders();
+        loadMenuAvailability();
+    </script>
+</body>
+</html>

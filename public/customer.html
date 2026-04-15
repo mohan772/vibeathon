@@ -1,0 +1,566 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <title>Customer Portal - Restaurant AI</title>
+    <style>
+        :root {
+            --primary: #ff6b00;
+            --primary-dark: #e65f00;
+            --primary-soft: #fff1e6;
+            --bg: #f4f5f7;
+            --card: #ffffff;
+            --text: #111827;
+            --muted: #6b7280;
+            --border: #e5e7eb;
+        }
+        body {
+            font-family: Inter, "Segoe UI", Arial, sans-serif;
+            background: var(--bg);
+            margin: 0;
+            padding: 1.2rem;
+            color: var(--text);
+        }
+        .app-shell { max-width: 460px; margin: 0 auto; }
+        h1, h2 { color: #111827; letter-spacing: -0.2px; margin: 0; }
+        h1 { font-size: 1.35rem; font-weight: 700; }
+        h2 { font-size: 1rem; margin-bottom: 0.75rem; }
+        .topbar {
+            background: linear-gradient(140deg, #ff7a1a, #ff6b00);
+            color: #fff;
+            border-radius: 16px;
+            padding: 1rem;
+            margin-bottom: 0.9rem;
+            box-shadow: 0 10px 22px rgba(255, 107, 0, 0.35);
+        }
+        .topbar .sub { opacity: 0.95; font-size: 0.88rem; margin-top: 0.28rem; }
+        .search {
+            margin-top: 0.75rem;
+            background: rgba(255,255,255,0.18);
+            border: 1px solid rgba(255,255,255,0.4);
+            border-radius: 999px;
+            padding: 0.52rem 0.8rem;
+            font-size: 0.86rem;
+        }
+        .chip-row { display: flex; gap: 0.45rem; overflow-x: auto; padding-bottom: 0.2rem; margin-bottom: 0.9rem; }
+        .chip {
+            background: #fff;
+            border: 1px solid var(--border);
+            border-radius: 999px;
+            padding: 0.4rem 0.7rem;
+            white-space: nowrap;
+            font-size: 0.78rem;
+            color: #374151;
+        }
+        .section {
+            background: var(--card);
+            border: 1px solid var(--border);
+            padding: 0.9rem;
+            border-radius: 14px;
+            margin-bottom: 0.8rem;
+            box-shadow: 0 2px 10px rgba(17, 24, 39, 0.05);
+        }
+        .menu-grid { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 0.7rem; }
+        .menu-category { margin-top: 0.7rem; }
+        .menu-category h3 { margin: 0.6rem 0 0.45rem 0; color: #111827; font-size: 0.9rem; }
+        .spinner-wrap { display: flex; align-items: center; gap: 1rem; flex-wrap: wrap; }
+        .spinner-wheel { width: 120px; height: 120px; border-radius: 50%; border: 8px solid #ffd9bf; display: flex; align-items: center; justify-content: center; font-weight: 700; color: #7c2d12; background: conic-gradient(#ffb380 0deg 60deg, #ffd1ae 60deg 120deg, #ffb380 120deg 180deg, #ffd1ae 180deg 240deg, #ffb380 240deg 300deg, #ffd1ae 300deg 360deg); box-shadow: inset 0 0 0 4px #fff; font-size: 0.75rem; text-align: center; padding: 0.3rem; }
+        .spinner-wheel.spin { animation: spinWheel 1.2s ease-in-out; }
+        @keyframes spinWheel {
+            0% { transform: rotate(0deg); }
+            100% { transform: rotate(1080deg); }
+        }
+        .spinner-result { font-weight: 600; color: #0f172a; }
+        .menu-item { border: 1px solid #edf0f3; padding: 0.55rem; border-radius: 12px; background: #fff; }
+        .menu-image {
+            width: 100%;
+            height: 94px;
+            object-fit: cover;
+            border-radius: 8px;
+            margin-bottom: 0.45rem;
+            border: 1px solid #e2e8f0;
+        }
+        .menu-image-fallback {
+            width: 100%;
+            height: 94px;
+            border-radius: 8px;
+            margin-bottom: 0.45rem;
+            border: 1px solid #e2e8f0;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            font-size: 1.8rem;
+            background: linear-gradient(135deg, #dbeafe, #ede9fe);
+        }
+        .menu-item button, .primary-button {
+            background: linear-gradient(130deg, var(--primary), #ff8a33);
+            color: #fff;
+            border: none;
+            padding: 0.45rem 0.68rem;
+            border-radius: 8px;
+            cursor: pointer;
+            font-weight: 600;
+            box-shadow: 0 6px 14px rgba(255, 107, 0, 0.22);
+            font-size: 0.78rem;
+        }
+        .menu-item button:hover, .primary-button:hover { transform: translateY(-1px); }
+        .grid-two { display: grid; grid-template-columns: 1fr 1fr; gap: 0.75rem; }
+        input {
+            width: 100%;
+            box-sizing: border-box;
+            padding: 0.62rem 0.7rem;
+            border: 1px solid #cbd5e1;
+            border-radius: 8px;
+            outline: none;
+            background: #fff;
+        }
+        input:focus { border-color: #ffb280; box-shadow: 0 0 0 3px rgba(255, 136, 51, 0.2); }
+        .cart-list { margin: 0.4rem 0; padding-left: 1rem; max-height: 120px; overflow: auto; }
+        .cart-list li { margin: 0.15rem 0; font-size: 0.88rem; }
+        .hint { color: var(--muted); font-size: 0.9rem; }
+        .success { color: #047857; }
+        .error { color: #b91c1c; }
+        .order-card { background: #f9fafb; border-radius: 10px; padding: 0.75rem; border: 1px solid #eceff2; font-size: 0.88rem; }
+        .order-card p { margin: 0.35rem 0; }
+        .order-card ul { margin: 0.4rem 0 0.2rem 1.1rem; }
+        .order-card .label { font-weight: bold; }
+        .menu-price { color: var(--primary-dark); font-weight: 700; margin: 0.2rem 0 0.45rem 0; font-size: 0.86rem; }
+        .section-title-row { display: flex; justify-content: space-between; align-items: center; margin-bottom: 0.2rem; }
+        .see-all { font-size: 0.72rem; color: var(--primary); font-weight: 600; }
+        .inline-row { display: flex; gap: 0.5rem; }
+        .loyalty-box { margin-top: 0.7rem; background: #fff7ed; border: 1px solid #fed7aa; border-radius: 10px; padding: 0.65rem; }
+        .loyalty-box p { margin: 0.3rem 0; font-size: 0.83rem; }
+        @media (max-width: 430px) {
+            .menu-grid { grid-template-columns: 1fr 1fr; }
+            .grid-two { grid-template-columns: 1fr; }
+        }
+    </style>
+</head>
+<body>
+    <div class="app-shell">
+    <div class="topbar">
+        <h1>FoodieHub</h1>
+        <div class="sub">Delicious food, delivered fast</div>
+        <div class="search">Search dishes or restaurants</div>
+    </div>
+
+    <div class="chip-row" id="category-strip">
+        <div class="chip">Pizza</div>
+        <div class="chip">Burger</div>
+        <div class="chip">Biryani</div>
+        <div class="chip">Drinks</div>
+        <div class="chip">Dessert</div>
+    </div>
+
+    <div class="section">
+        <div class="section-title-row"><h2>1) Enter Details</h2><span class="see-all">Required</span></div>
+        <div class="grid-two">
+            <input id="customer-name" placeholder="Full Name *" />
+            <input id="customer-phone" placeholder="Phone Number *" />
+            <input id="customer-email" placeholder="Email (optional)" />
+            <input id="customer-address" placeholder="Address (optional)" />
+        </div>
+        <p class="hint">Name and phone are mandatory before placing an order.</p>
+        <div class="loyalty-box">
+            <div class="inline-row">
+                <button class="primary-button" onclick="checkLoyaltyStatus()">Check Loyalty Progress</button>
+            </div>
+            <p id="loyalty-message">Complete 5 paid orders to unlock 1 free item on the next order.</p>
+            <div class="grid-two">
+                <input id="free-item-name" placeholder="Free item name to redeem" />
+                <button class="primary-button" onclick="toggleRedeemFreeItem()" id="redeem-toggle-btn">Redeem: OFF</button>
+            </div>
+        </div>
+    </div>
+
+    <div class="section">
+        <div class="section-title-row"><h2>2) AI Menu Assistant</h2><span class="see-all">Smart Picks</span></div>
+        <div class="grid-two">
+            <input id="ai-mood" placeholder="Mood (e.g. comfort food, light, spicy)" />
+            <input id="ai-budget" placeholder="Budget (e.g. 250)" />
+            <input id="ai-preferences" placeholder="Preferences (e.g. high protein, less spicy)" />
+        </div>
+        <button class="primary-button" onclick="getAiSuggestions()" style="margin-top: 0.7rem;">Get AI Suggestions</button>
+        <p id="ai-message"></p>
+        <div id="ai-suggestions" class="order-card">Suggestions will appear here.</div>
+    </div>
+
+    <div class="section">
+        <div class="section-title-row"><h2>3) What Should I Eat? 🎡</h2><span class="see-all">Try Luck</span></div>
+        <div class="spinner-wrap">
+            <div id="food-spinner-wheel" class="spinner-wheel">SPIN</div>
+            <div>
+                <button class="primary-button" onclick="spinForDish()">Spin the Wheel</button>
+                <p id="spinner-result" class="spinner-result">Spin to get a surprise dish.</p>
+                <button id="spinner-add-btn" class="primary-button" onclick="addSpinnerPickToCart()" style="display:none;">Add Pick to Cart</button>
+            </div>
+        </div>
+    </div>
+
+    <div class="section">
+        <div class="section-title-row"><h2>4) Menu</h2><span class="see-all">Fresh Today</span></div>
+        <div id="menu-list">Loading menu...</div>
+        <h3>Cart (<span id="cart-count">0</span>)</h3>
+        <ul id="cart-list" class="cart-list"></ul>
+        <button class="primary-button" onclick="placeOrder()">Place Order</button>
+        <p id="place-order-message"></p>
+    </div>
+
+    <div class="section">
+        <div class="section-title-row"><h2>5) Track Order</h2><span class="see-all">Live</span></div>
+        <div class="grid-two">
+            <input id="track-order-id" placeholder="Order ID (e.g. ORD-XXXX)" />
+            <input id="track-phone" placeholder="Phone used while ordering" />
+        </div>
+        <button class="primary-button" onclick="trackOrder()" style="margin-top: 0.7rem;">Track Order</button>
+        <p id="track-message"></p>
+        <div id="order-details" class="order-card">No order details loaded yet.</div>
+    </div>
+
+    <script>
+        let cart = [];
+        let menuCache = [];
+        let spinnerPick = null;
+        let redeemFreeItem = false;
+        const menuImageMap = {
+            'Garlic Bread': 'https://images.pexels.com/photos/825661/pexels-photo-825661.jpeg?auto=compress&cs=tinysrgb&w=1200',
+            'Tomato Soup': 'https://images.pexels.com/photos/539451/pexels-photo-539451.jpeg?auto=compress&cs=tinysrgb&w=1200',
+            'Burger': 'https://images.pexels.com/photos/1639557/pexels-photo-1639557.jpeg?auto=compress&cs=tinysrgb&w=1200',
+            'Veg Burger': 'https://images.pexels.com/photos/1639562/pexels-photo-1639562.jpeg?auto=compress&cs=tinysrgb&w=1200',
+            'Paneer Burger': 'https://images.pexels.com/photos/1639557/pexels-photo-1639557.jpeg?auto=compress&cs=tinysrgb&w=1200',
+            'Margherita Pizza': 'https://images.pexels.com/photos/825661/pexels-photo-825661.jpeg?auto=compress&cs=tinysrgb&w=1200',
+            'Paneer Pizza': 'https://images.pexels.com/photos/905847/pexels-photo-905847.jpeg?auto=compress&cs=tinysrgb&w=1200',
+            'Pasta Alfredo': 'https://images.pexels.com/photos/1279330/pexels-photo-1279330.jpeg?auto=compress&cs=tinysrgb&w=1200',
+            'Chicken Biryani': 'https://images.pexels.com/photos/1762490/pexels-photo-1762490.jpeg?auto=compress&cs=tinysrgb&w=1200',
+            'Greek Salad': 'https://images.pexels.com/photos/1213710/pexels-photo-1213710.jpeg?auto=compress&cs=tinysrgb&w=1200',
+            'Chocolate Brownie': 'https://images.pexels.com/photos/291528/pexels-photo-291528.jpeg?auto=compress&cs=tinysrgb&w=1200',
+            'Ice Cream Sundae': 'https://images.pexels.com/photos/1352278/pexels-photo-1352278.jpeg?auto=compress&cs=tinysrgb&w=1200',
+            'Chocolate Cake': 'https://images.pexels.com/photos/291528/pexels-photo-291528.jpeg?auto=compress&cs=tinysrgb&w=1200',
+            'Cold Coffee': 'https://images.pexels.com/photos/302899/pexels-photo-302899.jpeg?auto=compress&cs=tinysrgb&w=1200',
+            'Fresh Lime Soda': 'https://images.pexels.com/photos/96974/pexels-photo-96974.jpeg?auto=compress&cs=tinysrgb&w=1200',
+            'Orange Juice': 'https://images.pexels.com/photos/96974/pexels-photo-96974.jpeg?auto=compress&cs=tinysrgb&w=1200',
+            'Mojito': 'https://images.pexels.com/photos/96974/pexels-photo-96974.jpeg?auto=compress&cs=tinysrgb&w=1200'
+        };
+        const categoryFallbackImages = {
+            starter: 'https://images.pexels.com/photos/1640774/pexels-photo-1640774.jpeg?auto=compress&cs=tinysrgb&w=1200',
+            main_course: 'https://images.pexels.com/photos/958545/pexels-photo-958545.jpeg?auto=compress&cs=tinysrgb&w=1200',
+            dessert: 'https://images.pexels.com/photos/291528/pexels-photo-291528.jpeg?auto=compress&cs=tinysrgb&w=1200',
+            beverage: 'https://images.pexels.com/photos/302899/pexels-photo-302899.jpeg?auto=compress&cs=tinysrgb&w=1200'
+        };
+
+        function renderCart() {
+            const cartList = document.getElementById('cart-list');
+            cartList.innerHTML = '';
+            cart.forEach((item) => {
+                const li = document.createElement('li');
+                li.textContent = item;
+                cartList.appendChild(li);
+            });
+            document.getElementById('cart-count').innerText = String(cart.length);
+        }
+
+        function addToCart(itemName) {
+            cart.push(itemName);
+            renderCart();
+        }
+
+        function spinForDish() {
+            const availableMenu = menuCache.filter((item) => item.available !== false);
+            const resultEl = document.getElementById('spinner-result');
+            const wheelEl = document.getElementById('food-spinner-wheel');
+            const addBtn = document.getElementById('spinner-add-btn');
+
+            if (availableMenu.length === 0) {
+                resultEl.textContent = 'No available dishes to spin right now.';
+                addBtn.style.display = 'none';
+                spinnerPick = null;
+                return;
+            }
+
+            const randomIndex = Math.floor(Math.random() * availableMenu.length);
+            spinnerPick = availableMenu[randomIndex];
+
+            wheelEl.classList.remove('spin');
+            void wheelEl.offsetWidth;
+            wheelEl.classList.add('spin');
+            wheelEl.textContent = '...';
+
+            setTimeout(() => {
+                wheelEl.textContent = spinnerPick.name;
+                resultEl.textContent = `You got ${spinnerPick.name} for $${Number(spinnerPick.price || 0).toFixed(2)}.`;
+                addBtn.style.display = 'inline-block';
+            }, 1200);
+        }
+
+        function addSpinnerPickToCart() {
+            if (!spinnerPick) return;
+            addToCart(spinnerPick.name);
+            document.getElementById('spinner-result').textContent = `${spinnerPick.name} added to your cart.`;
+        }
+
+        function toggleRedeemFreeItem() {
+            redeemFreeItem = !redeemFreeItem;
+            document.getElementById('redeem-toggle-btn').textContent = `Redeem: ${redeemFreeItem ? 'ON' : 'OFF'}`;
+        }
+
+        async function checkLoyaltyStatus() {
+            const phone = document.getElementById('customer-phone').value.trim();
+            const messageEl = document.getElementById('loyalty-message');
+            if (!phone) {
+                messageEl.className = 'error';
+                messageEl.textContent = 'Enter phone number to check loyalty progress.';
+                return;
+            }
+
+            try {
+                const res = await fetch(`/api/loyalty/${encodeURIComponent(phone)}`);
+                const data = await res.json();
+                if (!res.ok) throw new Error(data.error || 'Failed to load loyalty status.');
+
+                messageEl.className = data.eligibleForFreeItem ? 'success' : '';
+                messageEl.textContent = data.eligibleForFreeItem
+                    ? `You are eligible! Turn Redeem ON and add your free item name.`
+                    : `Paid orders completed: ${data.paidOrdersSinceLastReward}/5. ${data.ordersNeededForReward} more to unlock free item.`;
+            } catch (error) {
+                messageEl.className = 'error';
+                messageEl.textContent = error.message;
+            }
+        }
+
+        function categoryLabel(category) {
+            const labels = {
+                starter: 'Starters',
+                main_course: 'Main Course',
+                dessert: 'Desserts',
+                beverage: 'Beverages'
+            };
+            return labels[category] || 'Other';
+        }
+
+        function renderCategoryStrip(menuItems) {
+            const strip = document.getElementById('category-strip');
+            if (!strip || !Array.isArray(menuItems)) return;
+
+            const unique = [...new Set(menuItems.map((item) => categoryLabel(item.category || 'main_course')))];
+            strip.innerHTML = unique.map((label) => `<div class="chip">${label}</div>`).join('');
+        }
+
+        function resolveMenuImage(item) {
+            if (item && menuImageMap[item.name]) return menuImageMap[item.name];
+            if (item && item.imageUrl && item.imageUrl.trim()) return item.imageUrl;
+            if (item && item.category && categoryFallbackImages[item.category]) {
+                return categoryFallbackImages[item.category];
+            }
+            return `https://images.unsplash.com/photo-1504674900247-0877df9cc836?auto=format&fit=crop&w=800&q=80`;
+        }
+
+        function renderMenu(menuItems) {
+            const menuList = document.getElementById('menu-list');
+            if (!Array.isArray(menuItems) || menuItems.length === 0) {
+                menuList.textContent = 'No menu items available.';
+                return;
+            }
+
+            const grouped = {};
+            menuItems
+                .filter((item) => item.available !== false)
+                .forEach((item) => {
+                    const category = item.category || 'main_course';
+                    if (!grouped[category]) grouped[category] = [];
+                    grouped[category].push(item);
+                });
+
+            menuList.innerHTML = Object.keys(grouped).map((category) => `
+                <div class="menu-category">
+                    <h3>${categoryLabel(category)}</h3>
+                    <div class="menu-grid">
+                        ${grouped[category].map((item) => `
+                            <div class="menu-item">
+                                <img
+                                    class="menu-image"
+                                    src="${resolveMenuImage(item)}"
+                                    alt="${item.name}"
+                                    onerror="this.style.display='none'; this.nextElementSibling.style.display='flex';"
+                                    style=""
+                                />
+                                <div class="menu-image-fallback" style="display:none;">🍽️</div>
+                                <h4>${item.name}</h4>
+                                <p class="menu-price">$${Number(item.price || 0).toFixed(2)}</p>
+                                <button onclick="addToCart('${item.name.replace(/'/g, "\\'")}')">Add</button>
+                            </div>
+                        `).join('')}
+                    </div>
+                </div>
+            `).join('');
+        }
+
+        async function loadMenu() {
+            try {
+                await fetch('/api/menu/seed-defaults', { method: 'POST' });
+                const response = await fetch('/api/menu');
+                const menuItems = await response.json();
+                menuCache = Array.isArray(menuItems) ? menuItems : [];
+                renderCategoryStrip(menuCache);
+                renderMenu(menuItems);
+            } catch (error) {
+                document.getElementById('menu-list').textContent = 'Failed to load menu.';
+            }
+        }
+
+        function getCustomerPayload() {
+            return {
+                name: document.getElementById('customer-name').value.trim(),
+                phone: document.getElementById('customer-phone').value.trim(),
+                email: document.getElementById('customer-email').value.trim(),
+                address: document.getElementById('customer-address').value.trim()
+            };
+        }
+
+        async function placeOrder() {
+            const messageEl = document.getElementById('place-order-message');
+            messageEl.className = '';
+            messageEl.textContent = '';
+
+            const customer = getCustomerPayload();
+            if (!customer.name || !customer.phone) {
+                messageEl.className = 'error';
+                messageEl.textContent = 'Please enter name and phone before placing order.';
+                return;
+            }
+            if (cart.length === 0) {
+                messageEl.className = 'error';
+                messageEl.textContent = 'Please add at least one item.';
+                return;
+            }
+
+            try {
+                const response = await fetch('/api/orders', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({
+                        customer,
+                        items: cart,
+                        redeemFreeItem,
+                        freeItemName: document.getElementById('free-item-name').value.trim()
+                    })
+                });
+                const data = await response.json();
+                if (!response.ok) throw new Error(data.error || 'Order placement failed.');
+
+                messageEl.className = 'success';
+                messageEl.textContent = `Order placed. Your Order ID is ${data.order.orderId}`;
+                document.getElementById('track-order-id').value = data.order.orderId;
+                document.getElementById('track-phone').value = customer.phone;
+                document.getElementById('loyalty-message').className = data.loyalty?.eligibleForFreeItem ? 'success' : '';
+                if (data.loyalty) {
+                    document.getElementById('loyalty-message').textContent = data.loyalty.eligibleForFreeItem
+                        ? 'Reward unlocked again! You can redeem on your next order.'
+                        : `Paid orders completed: ${data.loyalty.paidOrdersSinceLastReward}/5. ${data.loyalty.ordersNeededForReward} more to unlock free item.`;
+                }
+                cart = [];
+                renderCart();
+                if (redeemFreeItem) {
+                    redeemFreeItem = false;
+                    document.getElementById('redeem-toggle-btn').textContent = 'Redeem: OFF';
+                    document.getElementById('free-item-name').value = '';
+                }
+            } catch (error) {
+                messageEl.className = 'error';
+                messageEl.textContent = error.message;
+            }
+        }
+
+        async function getAiSuggestions() {
+            const messageEl = document.getElementById('ai-message');
+            const suggestionEl = document.getElementById('ai-suggestions');
+            messageEl.className = '';
+            messageEl.textContent = '';
+
+            const payload = {
+                mood: document.getElementById('ai-mood').value.trim(),
+                budget: document.getElementById('ai-budget').value.trim(),
+                preferences: document.getElementById('ai-preferences').value.trim(),
+                cart: cart
+            };
+
+            try {
+                const response = await fetch('/api/ai/recommend', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify(payload)
+                });
+                const data = await response.json();
+                if (!response.ok) throw new Error(data.error || 'Could not generate suggestions.');
+
+                messageEl.className = 'success';
+                messageEl.textContent = 'AI suggestions ready.';
+                suggestionEl.textContent = data.recommendation;
+            } catch (error) {
+                messageEl.className = 'error';
+                messageEl.textContent = error.message;
+                suggestionEl.textContent = 'Suggestions will appear here.';
+            }
+        }
+
+        async function trackOrder() {
+            const orderId = document.getElementById('track-order-id').value.trim();
+            const phone = document.getElementById('track-phone').value.trim();
+            const trackMessage = document.getElementById('track-message');
+            const detailsEl = document.getElementById('order-details');
+
+            trackMessage.className = '';
+            trackMessage.textContent = '';
+
+            if (!orderId || !phone) {
+                trackMessage.className = 'error';
+                trackMessage.textContent = 'Please enter both Order ID and phone.';
+                return;
+            }
+
+            try {
+                const response = await fetch(`/api/orders/track/${encodeURIComponent(orderId)}?phone=${encodeURIComponent(phone)}`);
+                const data = await response.json();
+                if (!response.ok) throw new Error(data.error || 'Could not fetch order.');
+
+                trackMessage.className = 'success';
+                trackMessage.textContent = 'Order details loaded.';
+                renderOrderDetails(data);
+            } catch (error) {
+                trackMessage.className = 'error';
+                trackMessage.textContent = error.message;
+                detailsEl.textContent = 'No order details loaded yet.';
+            }
+        }
+
+        function formatStatus(status) {
+            if (!status) return 'Pending';
+            return status.charAt(0).toUpperCase() + status.slice(1);
+        }
+
+        function renderOrderDetails(order) {
+            const detailsEl = document.getElementById('order-details');
+            const itemLines = (order.items || [])
+                .map((item) => `<li>${item.name} - $${Number(item.price || 0).toFixed(2)}</li>`)
+                .join('');
+
+            const createdAt = order.createdAt
+                ? new Date(order.createdAt).toLocaleString()
+                : 'Not available';
+
+            detailsEl.innerHTML = `
+                <p><span class="label">Order ID:</span> ${order.orderId || 'N/A'}</p>
+                <p><span class="label">Customer:</span> ${order.customer?.name || 'N/A'}</p>
+                <p><span class="label">Phone:</span> ${order.customer?.phone || 'N/A'}</p>
+                <p><span class="label">Status:</span> ${formatStatus(order.status)}</p>
+                <p><span class="label">Ordered At:</span> ${createdAt}</p>
+                <p><span class="label">Items:</span></p>
+                <ul>${itemLines || '<li>No items found</li>'}</ul>
+                <p><span class="label">Total Bill:</span> $${Number(order.totalAmount || 0).toFixed(2)}</p>
+            `;
+        }
+
+        loadMenu();
+    </script>
+    </div>
+</body>
+</html>

@@ -1,20 +1,56 @@
 import mongoose from 'mongoose';
 
 const orderSchema = new mongoose.Schema({
+  orderId: {
+    type: String,
+    required: true,
+    unique: true
+  },
+  customer: {
+    name: {
+      type: String,
+      required: true,
+      trim: true
+    },
+    phone: {
+      type: String,
+      required: true,
+      trim: true
+    },
+    email: {
+      type: String,
+      trim: true
+    },
+    address: {
+      type: String,
+      trim: true
+    }
+  },
   items: {
-    type: [mongoose.Schema.Types.Mixed],
+    type: [String],
     required: true
   },
-  status: {
-    type: String,
-    enum: ['pending', 'preparing', 'completed', 'delivered'],
-    default: 'pending'
+  totalAmount: {
+    type: Number,
+    required: true
   },
-  priority: {
+  freeItemApplied: {
+    type: Boolean,
+    default: false
+  },
+  freeItemName: {
+    type: String
+  },
+  discountAmount: {
     type: Number,
     default: 0
   },
-  timestamp: {
+  status: {
+    type: String,
+    enum: ['pending', 'done'],
+    default: 'pending'
+  },
+  createdAt: {
     type: Date,
     default: Date.now
   }

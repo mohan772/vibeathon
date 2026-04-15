@@ -1,9 +1,10 @@
 import mongoose from 'mongoose';
 
 const inventorySchema = new mongoose.Schema({
-  itemName: {
+  item: {
     type: String,
-    required: true
+    required: true,
+    unique: true
   },
   quantity: {
     type: Number,

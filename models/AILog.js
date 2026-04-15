@@ -1,12 +1,12 @@
 import mongoose from 'mongoose';
 
 const aiLogSchema = new mongoose.Schema({
-  inputData: {
+  input: {
     type: mongoose.Schema.Types.Mixed,
     required: true
   },
-  aiResponse: {
-    type: mongoose.Schema.Types.Mixed,
+  output: {
+    type: String,
     required: true
   },
   timestamp: {
