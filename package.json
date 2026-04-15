@@ -1,0 +1,22 @@
+{
+  "name": "vibeathon-backend",
+  "version": "1.0.0",
+  "description": "Express backend server for Vibeathon",
+  "type": "module",
+  "main": "server.js",
+  "scripts": {
+    "start": "node server.js",
+    "dev": "node --watch server.js"
+  },
+  "keywords": [],
+  "author": "",
+  "license": "ISC",
+  "dependencies": {
+    "@google/generative-ai": "^0.4.0",
+    "cors": "^2.8.6",
+    "dotenv": "^16.6.1",
+    "express": "^4.22.1",
+    "mongoose": "^9.4.1",
+    "socket.io": "^4.8.3"
+  }
+}
