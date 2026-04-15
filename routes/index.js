@@ -9,7 +9,7 @@ import Menu from '../models/Menu.js';
 import AILog from '../models/AILog.js';
 
 // Services
-import { chatAnalytics, generateDecision, recommendForCustomer } from '../services/aiService.js';
+import { chatAnalytics, generateDecision, recommendForCustomer, generateKitchenPlan, generateLearningBrainInsight } from '../services/aiService.js';
 import { runShiftCommander } from '../services/shiftCommander.js';
 import { getRestaurantAnalytics } from '../services/restaurantService.js';
 
@@ -35,6 +35,9 @@ const calculateWorkload = (assignedOrders) => {
   return 'low';
 };
 
+const normalizePhone = (phone) => String(phone || '').replace(/\D/g, '').slice(-10);
+const isValidPhone = (phone) => /^\d{10}$/.test(phone);
+
 /**
  * Build a pricing summary for an array of item names.
  */
@@ -52,7 +55,8 @@ const buildOrderPricing = async (items) => {
 };
 
 const getLoyaltyStatus = async (phone) => {
-  if (!phone) {
+  const normalizedPhone = normalizePhone(phone);
+  if (!isValidPhone(normalizedPhone)) {
     return {
       paidOrdersSinceLastReward: 0,
       eligibleForFreeItem: false,
@@ -61,11 +65,11 @@ const getLoyaltyStatus = async (phone) => {
   }
 
   const latestRewardOrder = await Order.findOne({
-    'customer.phone': phone,
+    'customer.phone': normalizedPhone,
     freeItemApplied: true
   }).sort({ createdAt: -1 });
 
-  const query = { 'customer.phone': phone, freeItemApplied: { $ne: true } };
+  const query = { 'customer.phone': normalizedPhone, freeItemApplied: { $ne: true } };
   if (latestRewardOrder) {
     query.createdAt = { $gt: latestRewardOrder.createdAt };
   }
@@ -219,9 +223,13 @@ router.post('/orders', async (req, res) => {
         error: 'Customer details are required. Please provide customer.name and customer.phone.'
       });
     }
+    const normalizedPhone = normalizePhone(customer.phone);
+    if (!isValidPhone(normalizedPhone)) {
+      return res.status(400).json({ error: 'Please provide a valid 10-digit phone number.' });
+    }
 
     const { totalAmount, billItems } = await buildOrderPricing(items);
-    const loyalty = await getLoyaltyStatus(customer.phone);
+    const loyalty = await getLoyaltyStatus(normalizedPhone);
 
     let finalAmount = totalAmount;
     let discountAmount = 0;
@@ -249,7 +257,7 @@ router.post('/orders', async (req, res) => {
 
     const newOrder = new Order({
       orderId: `ORD-${Math.random().toString(36).substr(2, 9).toUpperCase()}`,
-      customer,
+      customer: { ...customer, phone: normalizedPhone },
       items,
       totalAmount: finalAmount,
       status: 'pending',
@@ -263,7 +271,7 @@ router.post('/orders', async (req, res) => {
     // Broadcast the new order to the kitchen and admin displays via Socket.io
     io.emit('order-update', { type: 'new', order: savedOrder });
 
-    const updatedLoyalty = await getLoyaltyStatus(customer.phone);
+    const updatedLoyalty = await getLoyaltyStatus(normalizedPhone);
 
     res.status(201).json({
       message: freeItemApplied
@@ -282,7 +290,11 @@ router.post('/orders', async (req, res) => {
  */
 router.get('/loyalty/:phone', async (req, res) => {
   try {
-    const status = await getLoyaltyStatus(req.params.phone);
+    const phone = normalizePhone(req.params.phone);
+    if (!isValidPhone(phone)) {
+      return res.status(400).json({ error: 'Please provide a valid 10-digit phone number.' });
+    }
+    const status = await getLoyaltyStatus(phone);
     res.json(status);
   } catch (err) {
     res.status(500).json({ error: 'Failed to load loyalty status.', details: err.message });
@@ -630,6 +642,139 @@ router.post('/ai/recommend', async (req, res) => {
     res.json({ recommendation });
   } catch (error) {
     res.status(500).json({ error: 'Recommendation service is unavailable.' });
+  }
+});
+
+/**
+ * Dynamic customer recommendation from live kitchen load.
+ */
+router.get('/ai/dynamic-recommendations', async (req, res) => {
+  try {
+    const [menuItems, activeOrders] = await Promise.all([
+      Menu.find({ available: true }).select('name cookingTime category'),
+      Order.find({ status: { $in: ['pending', 'preparing'] } }).select('items status')
+    ]);
+
+    if (menuItems.length === 0) {
+      return res.json({
+        recommendedNow: null,
+        avoidNow: null,
+        reason: 'No available menu items found.',
+        kitchenLoadSummary: { activeOrders: activeOrders.length, overloadedItemCount: 0 }
+      });
+    }
+
+    const itemLoadMap = new Map(menuItems.map((item) => [item.name, 0]));
+    activeOrders.forEach((order) => {
+      (order.items || []).forEach((itemName) => {
+        if (itemLoadMap.has(itemName)) {
+          itemLoadMap.set(itemName, itemLoadMap.get(itemName) + 1);
+        }
+      });
+    });
+
+    const scored = menuItems.map((item) => {
+      const load = itemLoadMap.get(item.name) || 0;
+      const cookingTime = Number(item.cookingTime || 10);
+      const score = cookingTime + (load * 6);
+      return { name: item.name, cookingTime, load, score };
+    });
+
+    scored.sort((a, b) => a.score - b.score);
+    const recommendedNow = scored[0];
+    const avoidNow = [...scored].sort((a, b) => b.score - a.score)[0];
+
+    const reason = avoidNow.load > 0
+      ? `Kitchen load is high for ${avoidNow.name}. ${recommendedNow.name} is faster with lower current station pressure.`
+      : `${recommendedNow.name} currently has the lowest prep-time risk.`;
+
+    res.json({
+      recommendedNow: {
+        name: recommendedNow.name,
+        reason: `Estimated prep ${recommendedNow.cookingTime} mins, load factor ${recommendedNow.load}`
+      },
+      avoidNow: {
+        name: avoidNow.name,
+        reason: `Estimated prep ${avoidNow.cookingTime} mins, load factor ${avoidNow.load}`
+      },
+      reason,
+      kitchenLoadSummary: {
+        activeOrders: activeOrders.length,
+        overloadedItemCount: scored.filter((item) => item.load >= 3).length
+      }
+    });
+  } catch (error) {
+    res.status(500).json({ error: 'Failed to generate dynamic recommendations.', details: error.message });
+  }
+});
+
+/**
+ * AI Kitchen Manager: generate cooking sequence and assignment plan.
+ */
+router.post('/ai/kitchen-plan', async (req, res) => {
+  try {
+    const [activeOrders, activeStaff, menu] = await Promise.all([
+      Order.find({ status: { $in: ['pending', 'preparing'] } }),
+      Staff.find({ shiftStatus: 'active' }),
+      Menu.find().select('name cookingTime')
+    ]);
+
+    const prepMap = new Map(menu.map((item) => [item.name, Number(item.cookingTime || 10)]));
+    const ordersContext = activeOrders.map((order) => {
+      const estimatedPrepMins = (order.items || []).reduce(
+        (sum, itemName) => sum + (prepMap.get(itemName) || 10),
+        0
+      );
+      return {
+        orderId: order.orderId,
+        status: order.status,
+        itemCount: (order.items || []).length,
+        items: order.items || [],
+        estimatedPrepMins,
+        createdAt: order.createdAt
+      };
+    });
+
+    const staffContext = activeStaff.map((member) => ({
+      name: member.name,
+      role: member.role,
+      workload: member.workload,
+      assignedOrders: member.assignedOrders || 0,
+      skills: member.skills || []
+    }));
+
+    const plan = await generateKitchenPlan({
+      generatedAt: new Date().toISOString(),
+      orders: ordersContext,
+      staff: staffContext
+    });
+
+    io.emit('kitchen-plan', plan);
+    res.json(plan);
+  } catch (error) {
+    res.status(500).json({ error: 'Failed to generate kitchen plan.', details: error.message });
+  }
+});
+
+/**
+ * Learning Restaurant Brain: adaptive recommendation from history.
+ */
+router.get('/ai/learning-brain', async (req, res) => {
+  try {
+    const [currentState, recentLogs] = await Promise.all([
+      getRestaurantAnalytics(),
+      AILog.find().sort({ timestamp: -1 }).limit(20).select('input output timestamp')
+    ]);
+
+    const insight = await generateLearningBrainInsight({
+      currentState,
+      recentLogs
+    });
+
+    io.emit('learning-brain', insight);
+    res.json(insight);
+  } catch (error) {
+    res.status(500).json({ error: 'Failed to generate learning brain insight.', details: error.message });
   }
 });
 

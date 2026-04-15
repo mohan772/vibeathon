@@ -130,6 +130,43 @@
         .inline-row { display: flex; gap: 0.5rem; }
         .loyalty-box { margin-top: 0.7rem; background: #fff7ed; border: 1px solid #fed7aa; border-radius: 10px; padding: 0.65rem; }
         .loyalty-box p { margin: 0.3rem 0; font-size: 0.83rem; }
+        .builder-step { margin-top: 0.55rem; }
+        .builder-step-label { font-weight: 600; font-size: 0.84rem; margin-bottom: 0.3rem; color: #374151; }
+        .builder-options { display: flex; flex-wrap: wrap; gap: 0.4rem; }
+        .builder-chip {
+            border: 1px solid #e5e7eb;
+            border-radius: 999px;
+            background: #fff;
+            padding: 0.38rem 0.68rem;
+            font-size: 0.76rem;
+            cursor: pointer;
+            color: #374151;
+        }
+        .builder-chip.active {
+            background: #ffedd5;
+            border-color: #fdba74;
+            color: #9a3412;
+            font-weight: 600;
+        }
+        .builder-preview {
+            margin-top: 0.7rem;
+            background: #fff7ed;
+            border: 1px solid #fed7aa;
+            border-radius: 10px;
+            padding: 0.65rem;
+            font-size: 0.83rem;
+            color: #7c2d12;
+        }
+        .dynamic-box {
+            margin-top: 0.6rem;
+            background: #fff;
+            border: 1px solid #e5e7eb;
+            border-radius: 10px;
+            padding: 0.65rem;
+            font-size: 0.84rem;
+        }
+        .dynamic-good { color: #166534; font-weight: 600; }
+        .dynamic-avoid { color: #b91c1c; font-weight: 600; }
         @media (max-width: 430px) {
             .menu-grid { grid-template-columns: 1fr 1fr; }
             .grid-two { grid-template-columns: 1fr; }
@@ -195,10 +232,47 @@
                 <button id="spinner-add-btn" class="primary-button" onclick="addSpinnerPickToCart()" style="display:none;">Add Pick to Cart</button>
             </div>
         </div>
+        <div class="dynamic-box">
+            <button class="primary-button" onclick="loadDynamicRecommendation()">Refresh Dynamic Recommendation</button>
+            <p id="dynamic-recommendation-output" style="margin-top: 0.6rem;">Loading kitchen-aware recommendation...</p>
+        </div>
     </div>
 
     <div class="section">
-        <div class="section-title-row"><h2>4) Menu</h2><span class="see-all">Fresh Today</span></div>
+        <div class="section-title-row"><h2>4) Build Your Own Dish</h2><span class="see-all">Customize</span></div>
+        <div class="builder-step">
+            <div class="builder-step-label">Step 1: Choose Base</div>
+            <div class="builder-options">
+                <button type="button" class="builder-chip" data-base="Rice Bowl" onclick="selectDishBase('Rice Bowl')">Rice Bowl</button>
+                <button type="button" class="builder-chip" data-base="Pasta Bowl" onclick="selectDishBase('Pasta Bowl')">Pasta Bowl</button>
+                <button type="button" class="builder-chip" data-base="Wrap" onclick="selectDishBase('Wrap')">Wrap</button>
+                <button type="button" class="builder-chip" data-base="Salad Bowl" onclick="selectDishBase('Salad Bowl')">Salad Bowl</button>
+            </div>
+        </div>
+        <div class="builder-step">
+            <div class="builder-step-label">Step 2: Add Toppings</div>
+            <div class="builder-options">
+                <button type="button" class="builder-chip" data-topping="Paneer" onclick="toggleDishTopping('Paneer')">Paneer</button>
+                <button type="button" class="builder-chip" data-topping="Mushroom" onclick="toggleDishTopping('Mushroom')">Mushroom</button>
+                <button type="button" class="builder-chip" data-topping="Cheese" onclick="toggleDishTopping('Cheese')">Cheese</button>
+                <button type="button" class="builder-chip" data-topping="Sweet Corn" onclick="toggleDishTopping('Sweet Corn')">Sweet Corn</button>
+                <button type="button" class="builder-chip" data-topping="Olives" onclick="toggleDishTopping('Olives')">Olives</button>
+            </div>
+        </div>
+        <div class="builder-step">
+            <div class="builder-step-label">Step 3: Select Spice Level</div>
+            <div class="builder-options">
+                <button type="button" class="builder-chip" data-spice="Mild" onclick="selectDishSpice('Mild')">Mild</button>
+                <button type="button" class="builder-chip" data-spice="Medium" onclick="selectDishSpice('Medium')">Medium</button>
+                <button type="button" class="builder-chip" data-spice="Hot" onclick="selectDishSpice('Hot')">Hot</button>
+            </div>
+        </div>
+        <div class="builder-preview" id="custom-dish-preview">Select options to build your dish.</div>
+        <button class="primary-button" onclick="addCustomDishToCart()" style="margin-top: 0.6rem;">Add Custom Dish to Cart</button>
+    </div>
+
+    <div class="section">
+        <div class="section-title-row"><h2>5) Menu</h2><span class="see-all">Fresh Today</span></div>
         <div id="menu-list">Loading menu...</div>
         <h3>Cart (<span id="cart-count">0</span>)</h3>
         <ul id="cart-list" class="cart-list"></ul>
@@ -207,7 +281,7 @@
     </div>
 
     <div class="section">
-        <div class="section-title-row"><h2>5) Track Order</h2><span class="see-all">Live</span></div>
+        <div class="section-title-row"><h2>6) Track Order</h2><span class="see-all">Live</span></div>
         <div class="grid-two">
             <input id="track-order-id" placeholder="Order ID (e.g. ORD-XXXX)" />
             <input id="track-phone" placeholder="Phone used while ordering" />
@@ -222,6 +296,13 @@
         let menuCache = [];
         let spinnerPick = null;
         let redeemFreeItem = false;
+        let loyaltyVerifiedPhone = '';
+        let loyaltyEligible = false;
+        const customDishState = {
+            base: '',
+            toppings: [],
+            spice: 'Medium'
+        };
         const menuImageMap = {
             'Garlic Bread': 'https://images.pexels.com/photos/825661/pexels-photo-825661.jpeg?auto=compress&cs=tinysrgb&w=1200',
             'Tomato Soup': 'https://images.pexels.com/photos/539451/pexels-photo-539451.jpeg?auto=compress&cs=tinysrgb&w=1200',
@@ -298,17 +379,81 @@
             document.getElementById('spinner-result').textContent = `${spinnerPick.name} added to your cart.`;
         }
 
+        function updateCustomDishPreview() {
+            const preview = document.getElementById('custom-dish-preview');
+            const base = customDishState.base || 'No base selected';
+            const toppings = customDishState.toppings.length > 0 ? customDishState.toppings.join(', ') : 'No toppings';
+            const spice = customDishState.spice || 'Medium';
+            preview.textContent = `Base: ${base} | Toppings: ${toppings} | Spice: ${spice}`;
+        }
+
+        function selectDishBase(base) {
+            customDishState.base = base;
+            document.querySelectorAll('.builder-chip[data-base]').forEach((chip) => {
+                chip.classList.toggle('active', chip.dataset.base === base);
+            });
+            updateCustomDishPreview();
+        }
+
+        function toggleDishTopping(topping) {
+            const index = customDishState.toppings.indexOf(topping);
+            if (index === -1) customDishState.toppings.push(topping);
+            else customDishState.toppings.splice(index, 1);
+
+            document.querySelectorAll('.builder-chip[data-topping]').forEach((chip) => {
+                chip.classList.toggle('active', customDishState.toppings.includes(chip.dataset.topping));
+            });
+            updateCustomDishPreview();
+        }
+
+        function selectDishSpice(spice) {
+            customDishState.spice = spice;
+            document.querySelectorAll('.builder-chip[data-spice]').forEach((chip) => {
+                chip.classList.toggle('active', chip.dataset.spice === spice);
+            });
+            updateCustomDishPreview();
+        }
+
+        function addCustomDishToCart() {
+            if (!customDishState.base) {
+                document.getElementById('place-order-message').className = 'error';
+                document.getElementById('place-order-message').textContent = 'Please select a base for custom dish.';
+                return;
+            }
+            const toppingsText = customDishState.toppings.length > 0 ? customDishState.toppings.join('+') : 'No-Toppings';
+            const dishName = `Custom ${customDishState.base} [${toppingsText}] (${customDishState.spice})`;
+            addToCart(dishName);
+            document.getElementById('place-order-message').className = 'success';
+            document.getElementById('place-order-message').textContent = 'Custom dish added to cart.';
+        }
+
+        function normalizePhoneClient(phone) {
+            return String(phone || '').replace(/\D/g, '').slice(-10);
+        }
+
         function toggleRedeemFreeItem() {
+            const phone = normalizePhoneClient(document.getElementById('customer-phone').value.trim());
+            const messageEl = document.getElementById('loyalty-message');
+            if (!loyaltyVerifiedPhone || loyaltyVerifiedPhone !== phone) {
+                messageEl.className = 'error';
+                messageEl.textContent = 'Verify loyalty with the same phone number before redeeming.';
+                return;
+            }
+            if (!loyaltyEligible) {
+                messageEl.className = 'error';
+                messageEl.textContent = 'This phone number is not eligible for free item yet.';
+                return;
+            }
             redeemFreeItem = !redeemFreeItem;
             document.getElementById('redeem-toggle-btn').textContent = `Redeem: ${redeemFreeItem ? 'ON' : 'OFF'}`;
         }
 
         async function checkLoyaltyStatus() {
-            const phone = document.getElementById('customer-phone').value.trim();
+            const phone = normalizePhoneClient(document.getElementById('customer-phone').value.trim());
             const messageEl = document.getElementById('loyalty-message');
-            if (!phone) {
+            if (!phone || phone.length !== 10) {
                 messageEl.className = 'error';
-                messageEl.textContent = 'Enter phone number to check loyalty progress.';
+                messageEl.textContent = 'Enter a valid 10-digit phone number to check loyalty progress.';
                 return;
             }
 
@@ -317,6 +462,8 @@
                 const data = await res.json();
                 if (!res.ok) throw new Error(data.error || 'Failed to load loyalty status.');
 
+                loyaltyVerifiedPhone = phone;
+                loyaltyEligible = Boolean(data.eligibleForFreeItem);
                 messageEl.className = data.eligibleForFreeItem ? 'success' : '';
                 messageEl.textContent = data.eligibleForFreeItem
                     ? `You are eligible! Turn Redeem ON and add your free item name.`
@@ -427,9 +574,25 @@
                 messageEl.textContent = 'Please enter name and phone before placing order.';
                 return;
             }
+            const normalizedPhone = normalizePhoneClient(customer.phone);
+            if (normalizedPhone.length !== 10) {
+                messageEl.className = 'error';
+                messageEl.textContent = 'Please enter a valid 10-digit phone number.';
+                return;
+            }
             if (cart.length === 0) {
                 messageEl.className = 'error';
                 messageEl.textContent = 'Please add at least one item.';
+                return;
+            }
+            if (redeemFreeItem && (!loyaltyVerifiedPhone || loyaltyVerifiedPhone !== normalizedPhone)) {
+                messageEl.className = 'error';
+                messageEl.textContent = 'Please verify loyalty with this phone number before redeeming.';
+                return;
+            }
+            if (redeemFreeItem && !loyaltyEligible) {
+                messageEl.className = 'error';
+                messageEl.textContent = 'This phone number is not eligible for free item yet.';
                 return;
             }
 
@@ -438,7 +601,7 @@
                     method: 'POST',
                     headers: { 'Content-Type': 'application/json' },
                     body: JSON.stringify({
-                        customer,
+                        customer: { ...customer, phone: normalizedPhone },
                         items: cart,
                         redeemFreeItem,
                         freeItemName: document.getElementById('free-item-name').value.trim()
@@ -453,6 +616,8 @@
                 document.getElementById('track-phone').value = customer.phone;
                 document.getElementById('loyalty-message').className = data.loyalty?.eligibleForFreeItem ? 'success' : '';
                 if (data.loyalty) {
+                    loyaltyVerifiedPhone = normalizedPhone;
+                    loyaltyEligible = Boolean(data.loyalty.eligibleForFreeItem);
                     document.getElementById('loyalty-message').textContent = data.loyalty.eligibleForFreeItem
                         ? 'Reward unlocked again! You can redeem on your next order.'
                         : `Paid orders completed: ${data.loyalty.paidOrdersSinceLastReward}/5. ${data.loyalty.ordersNeededForReward} more to unlock free item.`;
@@ -469,6 +634,18 @@
                 messageEl.textContent = error.message;
             }
         }
+
+        document.getElementById('customer-phone').addEventListener('input', () => {
+            const phone = normalizePhoneClient(document.getElementById('customer-phone').value.trim());
+            if (loyaltyVerifiedPhone && loyaltyVerifiedPhone !== phone) {
+                loyaltyVerifiedPhone = '';
+                loyaltyEligible = false;
+                redeemFreeItem = false;
+                document.getElementById('redeem-toggle-btn').textContent = 'Redeem: OFF';
+                document.getElementById('loyalty-message').className = '';
+                document.getElementById('loyalty-message').textContent = 'Phone changed. Verify loyalty again for this number.';
+            }
+        });
 
         async function getAiSuggestions() {
             const messageEl = document.getElementById('ai-message');
@@ -499,6 +676,33 @@
                 messageEl.className = 'error';
                 messageEl.textContent = error.message;
                 suggestionEl.textContent = 'Suggestions will appear here.';
+            }
+        }
+
+        async function loadDynamicRecommendation() {
+            const output = document.getElementById('dynamic-recommendation-output');
+            output.textContent = 'Loading kitchen-aware recommendation...';
+
+            try {
+                const res = await fetch('/api/ai/dynamic-recommendations');
+                const data = await res.json();
+                if (!res.ok) throw new Error(data.error || 'Failed to get dynamic recommendation.');
+
+                const recommended = data.recommendedNow?.name
+                    ? `<span class="dynamic-good">Recommended Now: ${data.recommendedNow.name}</span>`
+                    : '<span class="dynamic-good">Recommended Now: Not available</span>';
+                const avoid = data.avoidNow?.name
+                    ? `<span class="dynamic-avoid">Avoid Now: ${data.avoidNow.name}</span>`
+                    : '<span class="dynamic-avoid">Avoid Now: Not available</span>';
+                const reason = data.reason || 'No reason available.';
+
+                output.innerHTML = `
+                    ${recommended}<br>
+                    ${avoid}<br>
+                    <strong>Reason:</strong> ${reason}
+                `;
+            } catch (error) {
+                output.textContent = error.message;
             }
         }
 
@@ -560,6 +764,8 @@
         }
 
         loadMenu();
+        loadDynamicRecommendation();
+        updateCustomDishPreview();
     </script>
     </div>
 </body>

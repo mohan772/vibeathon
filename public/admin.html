@@ -30,6 +30,12 @@
         .kpi { display: grid; grid-template-columns: 1fr 1fr; gap: 0.6rem; }
         .kpi .tile { background: #f8fafc; border: 1px solid #e2e8f0; border-radius: 8px; padding: 0.6rem; }
         .kpi .value { font-size: 1.15rem; font-weight: 700; color: #1e1b4b; }
+        .plan-box { background: #f8fafc; border: 1px solid #e2e8f0; border-radius: 8px; padding: 0.7rem; max-height: 300px; overflow: auto; }
+        .plan-box h4 { margin: 0.5rem 0 0.35rem; color: #312e81; }
+        .plan-box ul { margin: 0.3rem 0 0.7rem 1rem; padding: 0; }
+        .plan-alert { background: #fff7ed; border: 1px solid #fed7aa; color: #9a3412; padding: 0.5rem; border-radius: 7px; font-weight: 600; }
+        .brain-box { background: #f8fafc; border: 1px solid #e2e8f0; border-radius: 8px; padding: 0.7rem; max-height: 300px; overflow: auto; }
+        .brain-box h4 { margin: 0.45rem 0 0.3rem; color: #312e81; }
     </style>
     <script src="https://cdn.socket.io/4.7.2/socket.io.min.js"></script>
 </head>
@@ -86,6 +92,24 @@
             <h2>Resource Health</h2>
             <div id="resource-health" class="kpi">
                 <div class="tile"><div>Loading...</div></div>
+            </div>
+        </div>
+
+        <div class="card full-width">
+            <h2>AI Kitchen Manager</h2>
+            <p>Generate live cooking sequence, priority orders, and chef assignments.</p>
+            <button onclick="generateKitchenPlan()">Generate Kitchen Plan</button>
+            <div id="kitchen-plan" class="plan-box" style="margin-top: 0.7rem;">
+                No kitchen plan generated yet.
+            </div>
+        </div>
+
+        <div class="card full-width">
+            <h2>Learning Restaurant Brain</h2>
+            <p>Adaptive AI learns from historical operations and recommends what to repeat now.</p>
+            <button onclick="generateLearningBrain()">Generate Learning Insight</button>
+            <div id="learning-brain" class="brain-box" style="margin-top: 0.7rem;">
+                No learning insight generated yet.
             </div>
         </div>
     </div>
@@ -213,6 +237,77 @@
             `;
         }
 
+        function renderKitchenPlan(plan) {
+            const host = document.getElementById('kitchen-plan');
+            const priorityHtml = (plan.prioritySequence || [])
+                .map((entry) => `<li><strong>${entry.orderId}</strong> - ${entry.reason} (${entry.estimatedDelayRisk} risk)</li>`)
+                .join('');
+            const assignmentHtml = (plan.chefAssignments || [])
+                .map((entry) => `<li><strong>${entry.orderId}</strong> -> ${entry.staffName}: ${entry.action}</li>`)
+                .join('');
+            const riskHtml = (plan.riskOrders || [])
+                .map((entry) => `<li><strong>${entry.orderId}</strong>: ${entry.issue} -> ${entry.suggestedFix}</li>`)
+                .join('');
+
+            host.innerHTML = `
+                <div class="plan-alert">${plan.alert || 'Kitchen alert unavailable.'}</div>
+                <h4>Priority Sequence</h4>
+                <ul>${priorityHtml || '<li>No priority entries.</li>'}</ul>
+                <h4>Chef Assignments</h4>
+                <ul>${assignmentHtml || '<li>No assignments suggested.</li>'}</ul>
+                <h4>Risk Orders</h4>
+                <ul>${riskHtml || '<li>No risk orders currently flagged.</li>'}</ul>
+                <h4>Impact</h4>
+                <p>${plan.impact || 'No impact summary available.'}</p>
+            `;
+        }
+
+        async function generateKitchenPlan() {
+            const host = document.getElementById('kitchen-plan');
+            host.textContent = 'Generating kitchen plan...';
+            const res = await fetch('/api/ai/kitchen-plan', { method: 'POST' });
+            const data = await res.json();
+            if (!res.ok) {
+                host.textContent = data.error || 'Failed to generate kitchen plan.';
+                return;
+            }
+            renderKitchenPlan(data);
+        }
+
+        function renderLearningBrain(data) {
+            const host = document.getElementById('learning-brain');
+            const patterns = (data.learnedPatterns || [])
+                .map((pattern) => `
+                    <li>
+                        <strong>${pattern.pattern}</strong><br>
+                        Seen: ${pattern.timesObserved} times | Success rate: ${pattern.estimatedSuccessRate}%<br>
+                        Why: ${pattern.whyItWorked}
+                    </li>
+                `).join('');
+
+            host.innerHTML = `
+                <div class="plan-alert">${data.headline || 'Learning headline unavailable.'}</div>
+                <h4>Learned Patterns</h4>
+                <ul>${patterns || '<li>No strong historical patterns yet.</li>'}</ul>
+                <h4>Apply Now</h4>
+                <p><strong>Action:</strong> ${data.applyNowRecommendation?.action || 'N/A'}</p>
+                <p><strong>Reason:</strong> ${data.applyNowRecommendation?.reason || 'N/A'}</p>
+                <p><strong>Expected Impact:</strong> ${data.applyNowRecommendation?.expectedImpact || 'N/A'}</p>
+            `;
+        }
+
+        async function generateLearningBrain() {
+            const host = document.getElementById('learning-brain');
+            host.textContent = 'Generating learning insight...';
+            const res = await fetch('/api/ai/learning-brain');
+            const data = await res.json();
+            if (!res.ok) {
+                host.textContent = data.error || 'Failed to generate learning insight.';
+                return;
+            }
+            renderLearningBrain(data);
+        }
+
         socket.on('order-update', (data) => {
             const log = document.getElementById('activity-log');
             log.innerHTML = `<div>[${new Date().toLocaleTimeString()}] Order ${data.type}: #${data.order._id.slice(-4)}</div>` + log.innerHTML;
@@ -223,6 +318,14 @@
         socket.on('staff-update', () => {
             loadStaff();
             updateResourceHealth();
+        });
+
+        socket.on('kitchen-plan', (plan) => {
+            renderKitchenPlan(plan);
+        });
+
+        socket.on('learning-brain', (insight) => {
+            renderLearningBrain(insight);
         });
 
         updateStats();
